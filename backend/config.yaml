@@ -1,0 +1,77 @@
+# =============================================================================
+# FPT Smart Parking CV - Configuration
+# All paths are relative to the project root directory.
+# =============================================================================
+
+# --- Input / Output Paths ---
+video_path: data/raw_videos/input_video.mp4
+output_video_path: data/outputs/annotated_video.mp4
+model_path: models/best.pt
+pretrained_model: yolov8s.pt
+
+# --- Frame Extraction ---
+frame_extract_fps: 1
+
+# --- Detection ---
+confidence_threshold: 0.35
+# Raised NMS IoU so overlapping boxes in dense parking are NOT suppressed
+iou_threshold: 0.7
+# Larger input size helps detect small / distant bikes (default 640)
+inference_imgsz: 1280
+inference_stride: 8
+
+# COCO class IDs used by YOLOv8 pretrained model
+classes:
+  person: 0
+  motorcycle: 3
+
+# --- Region of Interest ---
+roi_enabled: true
+# If true, only detections whose bottom-center is inside ROI are kept.
+# Detections outside ROI are discarded for counting, drawing, and gaps.
+roi_only: true
+
+# --- Demo Mode ---
+# When true, applies clean visual settings for presentation.
+demo_mode: true
+# Do not draw bounding boxes for detections outside the ROI
+draw_outside_roi: false
+# Disable parking violation rules (no "Possible lane blocking" labels)
+parking_rules_enabled: false
+# Do not fill the ROI polygon with colour (outline only)
+draw_roi_fill: false
+
+# --- Bird's Eye View ---
+bev_enabled: true
+bev_output_width: 1000
+bev_output_height: 700
+
+# --- Gap Measurement ---
+gap_enabled: true
+# Gap threshold in BEV pixel space (not real-world meters).
+# A gap wider than this value is considered "available" for parking.
+gap_threshold_pixels: 180
+# Minimum gap distance — ignore very small gaps (noise)
+min_gap_pixels: 160
+# Maximum gap distance — ignore unreasonably large gaps (edge artifacts)
+max_gap_pixels: 450
+
+# Number of past frames to consider for temporal smoothing
+temporal_smoothing_window: 5
+
+# A gap must persist for at least this many consecutive frames
+# before it is reported as "available" (reduces flickering).
+min_gap_frames: 5
+
+# If false, gap markers are drawn as small circles without distance text
+draw_gap_labels: false
+draw_gap_distance: false
+# Maximum number of available gaps to draw per frame (demo clarity)
+max_display_gaps: 3
+
+# --- Visualization ---
+show_person: true
+show_tracks: true
+
+# --- Output ---
+save_metrics: true

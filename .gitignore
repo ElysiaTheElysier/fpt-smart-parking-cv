@@ -216,3 +216,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+@"
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Videos and generated data
+*.mp4
+*.mov
+*.avi
+data/raw_videos/*
+data/extracted_frames/
+data/roboflow_upload/
+data/outputs/*
+runs/
+
+# YOLO downloaded/pretrained weights
+yolov8n.pt
+*.pt
+!models/.gitkeep
+"@ | Add-Content .gitignore
