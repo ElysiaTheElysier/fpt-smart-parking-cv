@@ -64,6 +64,33 @@ def save_points(json_path: str, points: np.ndarray) -> None:
 
 # ── Perspective Transform ────────────────────────────────────────────────────
 
+def order_points(pts: np.ndarray) -> np.ndarray:
+    """
+    Order 4 points in the sequence:
+    Top-Left, Top-Right, Bottom-Right, Bottom-Left.
+    """
+    rect = np.zeros((4, 2), dtype="float32")
+    
+    # Sort by y-coordinate to get top and bottom points
+    y_sorted = pts[np.argsort(pts[:, 1])]
+    
+    # Top 2 points
+    top_pts = y_sorted[:2, :]
+    # Sort top points by x-coordinate
+    tl, tr = top_pts[np.argsort(top_pts[:, 0])]
+    
+    # Bottom 2 points
+    bottom_pts = y_sorted[2:, :]
+    # Sort bottom points by x-coordinate
+    bl, br = bottom_pts[np.argsort(bottom_pts[:, 0])]
+    
+    rect[0] = tl
+    rect[1] = tr
+    rect[2] = br
+    rect[3] = bl
+    return rect
+
+
 def compute_perspective_transform(
     src_points: np.ndarray,
     width: int,
@@ -72,12 +99,12 @@ def compute_perspective_transform(
     """
     Compute the 3×3 perspective transform matrix that maps four source
     points to a rectangle of size (*width*, *height*).
+    Points are automatically sorted to TL, TR, BR, BL to prevent twists.
 
     Parameters
     ----------
     src_points : (4, 2) float32 array
-        Source quadrilateral corners in order:
-        top-left, top-right, bottom-right, bottom-left.
+        Source quadrilateral corners.
     width : int
         Desired output width in pixels.
     height : int
@@ -89,6 +116,7 @@ def compute_perspective_transform(
         3×3 homography matrix.
     """
     src = np.array(src_points, dtype=np.float32).reshape(4, 2)
+    src = order_points(src)  # Auto-sort to prevent bowtie warp
     dst = np.array(
         [[0, 0], [width, 0], [width, height], [0, height]],
         dtype=np.float32,

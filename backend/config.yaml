@@ -7,18 +7,20 @@
 video_path: data/raw_videos/input_video.mp4
 output_video_path: data/outputs/annotated_video.mp4
 model_path: models/best.pt
-pretrained_model: yolov8s.pt
+pretrained_model: yolov8n.pt
 
 # --- Frame Extraction ---
 frame_extract_fps: 1
 
 # --- Detection ---
-confidence_threshold: 0.35
+confidence_threshold: 0.25
 # Raised NMS IoU so overlapping boxes in dense parking are NOT suppressed
 iou_threshold: 0.7
 # Larger input size helps detect small / distant bikes (default 640)
 inference_imgsz: 1280
-inference_stride: 8
+inference_stride: 60
+# Maximum number of frames to process (useful for quick demos). Set to 0 to process all.
+max_frames: 0
 
 # COCO class IDs used by YOLOv8 pretrained model
 classes:
@@ -29,7 +31,7 @@ classes:
 roi_enabled: true
 # If true, only detections whose bottom-center is inside ROI are kept.
 # Detections outside ROI are discarded for counting, drawing, and gaps.
-roi_only: true
+roi_only: false
 
 # --- Demo Mode ---
 # When true, applies clean visual settings for presentation.
@@ -45,29 +47,31 @@ draw_roi_fill: false
 bev_enabled: true
 bev_output_width: 1000
 bev_output_height: 700
+# Draw a PiP (Picture-in-Picture) minimap of the BEV in the output video
+draw_bev_minimap: true
 
 # --- Gap Measurement ---
 gap_enabled: true
 # Gap threshold in BEV pixel space (not real-world meters).
 # A gap wider than this value is considered "available" for parking.
-gap_threshold_pixels: 180
+gap_threshold_pixels: 255
 # Minimum gap distance — ignore very small gaps (noise)
-min_gap_pixels: 160
+min_gap_pixels: 255
 # Maximum gap distance — ignore unreasonably large gaps (edge artifacts)
-max_gap_pixels: 450
+max_gap_pixels: 1000
 
 # Number of past frames to consider for temporal smoothing
 temporal_smoothing_window: 5
 
 # A gap must persist for at least this many consecutive frames
 # before it is reported as "available" (reduces flickering).
-min_gap_frames: 5
+min_gap_frames: 2
 
 # If false, gap markers are drawn as small circles without distance text
-draw_gap_labels: false
-draw_gap_distance: false
+draw_gap_labels: true
+draw_gap_distance: true
 # Maximum number of available gaps to draw per frame (demo clarity)
-max_display_gaps: 3
+max_display_gaps: 10
 
 # --- Visualization ---
 show_person: true

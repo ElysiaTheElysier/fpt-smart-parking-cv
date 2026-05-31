@@ -14,10 +14,12 @@ draws all overlays, and saves:
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+import math
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import imageio
 import pandas as pd
 
 from backend.core.bev import (
@@ -155,6 +157,11 @@ class VideoProcessor:
 
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        max_frames_cfg = self.cfg.get("max_frames", 0)
+        if max_frames_cfg > 0:
+            total_frames = min(total_frames, max_frames_cfg)
+
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -177,8 +184,13 @@ class VideoProcessor:
 
         # ── Video writer ─────────────────────────────────────────────
         ensure_dir(os.path.dirname(output_path))
+        
+        # We write to a temporary mp4v file first, because OpenCV on Windows 
+        # often fails to write H.264 directly without extra DLLs.
+        temp_output_path = output_path.replace(".mp4", "_temp.mp4")
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            
+        out = cv2.VideoWriter(temp_output_path, fourcc, fps, (width, height))
 
         # ── Metrics accumulators ─────────────────────────────────────
         metrics_rows: List[Dict] = []
@@ -194,7 +206,7 @@ class VideoProcessor:
 
         while True:
             ret, frame = cap.read()
-            if not ret:
+            if not ret or (max_frames_cfg > 0 and frame_idx >= max_frames_cfg):
                 break
 
             timestamp = frame_idx / fps if fps > 0 else 0.0
@@ -274,6 +286,38 @@ class VideoProcessor:
                 mc_count, person_count, available_gaps,
             )
 
+            # ── BEV minimap ──────────────────────────────────────────
+            if self.bev_enabled and self.cfg.get("draw_bev_minimap", True) and self.bev_matrix is not None:
+                # Warp current frame to BEV
+                bev_view = cv2.warpPerspective(
+                    frame, self.bev_matrix, (self.bev_w, self.bev_h)
+                )
+
+                # Draw motorcycle points in BEV
+                mc_points_orig = [
+                    bbox_bottom_center(d["bbox"]) for d in detections 
+                    if d["class_name"] == "motorcycle"
+                ]
+                if mc_points_orig:
+                    pts_array = np.array(mc_points_orig, dtype=np.float32).reshape(-1, 1, 2)
+                    pts_bev = cv2.perspectiveTransform(pts_array, self.bev_matrix).reshape(-1, 2)
+                    for x, y in pts_bev:
+                        cv2.circle(bev_view, (int(x), int(y)), 8, COLOR_MOTORCYCLE, -1)
+
+                # Resize to minimap (width=400)
+                mini_w = 400
+                mini_h = int((self.bev_h / self.bev_w) * mini_w)
+                bev_mini = cv2.resize(bev_view, (mini_w, mini_h))
+
+                # Label & border
+                cv2.putText(bev_mini, "BEV Mini-map", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                cv2.rectangle(bev_mini, (0, 0), (mini_w-1, mini_h-1), (255, 255, 255), 2)
+
+                # Place at bottom-right
+                h_main, w_main = annotated.shape[:2]
+                y_off = h_main - mini_h - 20
+                x_off = w_main - mini_w - 20
+                annotated[y_off:y_off+mini_h, x_off:x_off+mini_w] = bev_mini
             out.write(annotated)
 
             # ── Save one debug screenshot ────────────────────────────
@@ -317,11 +361,22 @@ class VideoProcessor:
         cap.release()
         out.release()
 
-        elapsed_total = time.time() - t_start
-        print(f"\n[DONE] Processed {frame_idx} frames in {elapsed_total:.1f}s")
-        print(f"[DONE] Annotated video saved to: {output_path}")
+        # ── Convert to H.264 for web compatibility ───────────────────
+        print(f"[INFO] Converting video to H.264 for web playback...")
+        try:
+            reader = imageio.get_reader(temp_output_path)
+            writer = imageio.get_writer(output_path, fps=fps, codec='libx264')
+            for frame in reader:
+                writer.append_data(frame)
+            writer.close()
+            reader.close()
+            os.remove(temp_output_path)
+            print(f"[DONE] Annotated video saved to: {output_path}")
+        except Exception as e:
+            print(f"[ERROR] Video conversion failed: {e}")
+            print(f"[INFO] Fallback: Please view the raw video at {temp_output_path}")
 
-        # ── Save CSV files ───────────────────────────────────────────
+        # ── Save metrics ─────────────────────────────────────────────
         if self.save_metrics:
             self._save_csv(metrics_rows, gap_log_rows)
 

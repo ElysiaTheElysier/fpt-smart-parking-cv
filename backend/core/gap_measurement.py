@@ -146,6 +146,7 @@ class GapAnalyzer:
         # ---- 5. Euclidean distances between adjacent ----
         diffs = np.diff(pts_bev, axis=0)
         distances = np.linalg.norm(diffs, axis=1)
+        print(f"[DEBUG GAP] sort_axis={sort_axis}, distances: {np.round(distances)}")
 
         # ---- 6 & 7. Threshold + temporal smoothing ----
         new_history: Dict[int, int] = defaultdict(int)

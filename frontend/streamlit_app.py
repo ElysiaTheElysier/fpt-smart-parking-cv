@@ -65,7 +65,7 @@ st.header("🚀 Chạy Inference")
 
 col1, col2 = st.columns([1, 3])
 with col1:
-    run_btn = st.button("▶️ Run Inference", type="primary", use_container_width=True)
+    run_btn = st.button("▶️ Run Inference", type="primary")
 
 if run_btn:
     with st.spinner("Đang xử lý video... (có thể mất vài phút)"):
@@ -101,7 +101,8 @@ st.header("🎬 Video đã annotate")
 output_video = os.path.join(_PROJECT_ROOT, "data", "outputs", "annotated_video.mp4")
 
 if os.path.isfile(output_video):
-    st.video(output_video)
+    with open(output_video, 'rb') as f:
+        st.video(f.read())
 else:
     st.info("Chưa có video output. Nhấn **Run Inference** để tạo.")
 
@@ -147,22 +148,22 @@ if os.path.isfile(metrics_path):
         with chart_col1:
             st.line_chart(
                 df_metrics.set_index("timestamp")[["motorcycle_count", "person_count"]],
-                use_container_width=True,
+                width="stretch",
             )
         with chart_col2:
             st.line_chart(
                 df_metrics.set_index("timestamp")[["available_gap_count"]],
                 color="#FFD700",
-                use_container_width=True,
+                width="stretch",
             )
 
     with tab2:
-        st.dataframe(df_metrics, use_container_width=True, height=400)
+        st.dataframe(df_metrics.tail(100), width="stretch", height=400)
 
     # Gap log
     if os.path.isfile(gaps_path):
-        with st.expander("🔍 Gap Log chi tiết"):
-            st.dataframe(pd.read_csv(gaps_path), use_container_width=True, height=300)
+        with st.expander("🔍 Gap Log chi tiết (100 dòng cuối)"):
+            st.dataframe(pd.read_csv(gaps_path).tail(100), width="stretch", height=300)
 
 else:
     st.info("Chưa có metrics. Nhấn **Run Inference** để tạo.")
@@ -174,7 +175,7 @@ st.header("🖼️ Debug Screenshot")
 
 ss_path = os.path.join(_PROJECT_ROOT, "data", "outputs", "screenshots", "pipeline_debug.jpg")
 if os.path.isfile(ss_path):
-    st.image(ss_path, caption="Pipeline debug frame", use_container_width=True)
+    st.image(ss_path, caption="Pipeline debug frame", width="stretch")
 else:
     st.info("Chưa có screenshot debug.")
 
