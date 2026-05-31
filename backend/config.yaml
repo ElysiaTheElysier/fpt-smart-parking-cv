@@ -23,7 +23,7 @@ confidence_threshold: 0.25
 iou_threshold: 0.7
 # Larger input size helps detect small / distant bikes (default 640)
 inference_imgsz: 1280
-inference_stride: 60
+inference_stride: 1
 # Maximum number of frames to process (useful for quick demos). Set to 0 to process all.
 max_frames: 0
 
@@ -57,9 +57,12 @@ draw_bev_minimap: true
 
 # --- Gap Measurement ---
 gap_enabled: true
-# Gap threshold in BEV pixel space (not real-world meters).
-# A gap wider than this value is considered "available" for parking.
+# Gap threshold in BEV pixel space. Deprecated in favor of gap_threshold_meters.
 gap_threshold_pixels: 255
+# Physical scale: How many BEV pixels equal 1 real-world meter
+bev_pixels_per_meter: 200
+# Gap threshold in meters. A gap wider than this value is considered "available".
+gap_threshold_meters: 0.8
 # Minimum gap distance — ignore very small gaps (noise)
 min_gap_pixels: 255
 # Maximum gap distance — ignore unreasonably large gaps (edge artifacts)

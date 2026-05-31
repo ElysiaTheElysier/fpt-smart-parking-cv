@@ -31,49 +31,48 @@ from backend.core.utils import (
     point_in_polygon,
 )
 
+def calculate_iou(box1: List[float], box2: List[float]) -> float:
+    """Calculate IoU between two boxes [x1, y1, x2, y2]."""
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+
+    inter_area = max(0, x2 - x1) * max(0, y2 - y1)
+    if inter_area == 0:
+        return 0.0
+
+    box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
+
+    iou = inter_area / float(box1_area + box2_area - inter_area)
+    return iou
+
+
 
 class GapAnalyzer:
     """
     Stateful gap analyser — call :meth:`update` once per processed
     frame to get the current list of available gaps.
-
-    Parameters
-    ----------
-    gap_threshold : float
-        Minimum pixel distance in BEV space to consider a gap
-        "available".  Alias for *min_gap_pixels*.
-    min_gap_pixels : float or None
-        Explicit minimum gap distance.  Overrides *gap_threshold* if
-        provided.
-    max_gap_pixels : float or None
-        Gaps wider than this are discarded (edge / noise artefacts).
-    min_gap_frames : int
-        A gap must be seen for this many consecutive frames before it
-        is reported as available.
-    smoothing_window : int
-        Reserved for future use.
-    max_display : int or None
-        Maximum number of available gaps returned per frame (for demo
-        clarity).  ``None`` means unlimited.
     """
-
     def __init__(
         self,
-        gap_threshold: float = 120,
+        gap_threshold_meters: float = 0.8,
+        bev_pixels_per_meter: float = 200.0,
         min_gap_pixels: Optional[float] = None,
         max_gap_pixels: Optional[float] = None,
         min_gap_frames: int = 5,
         smoothing_window: int = 5,
         max_display: Optional[int] = None,
     ) -> None:
-        # min_gap_pixels takes precedence over gap_threshold
-        self.min_gap = min_gap_pixels if min_gap_pixels is not None else gap_threshold
+        self.gap_threshold_meters = gap_threshold_meters
+        self.bev_pixels_per_meter = bev_pixels_per_meter
+        self.min_gap_pixels = min_gap_pixels
         self.max_gap = max_gap_pixels
         self.min_gap_frames = min_gap_frames
         self.smoothing_window = smoothing_window
         self.max_display = max_display
 
-        # _gap_history[slot_index] = consecutive-frame-count
         self._gap_history: Dict[int, int] = defaultdict(int)
         self._prev_gap_count: int = 0
 
@@ -84,30 +83,33 @@ class GapAnalyzer:
         roi_polygon: Optional[np.ndarray],
         bev_enabled: bool = True,
     ) -> List[Dict]:
-        """
-        Compute gaps for the current frame.
+        
+        person_boxes = [det["bbox"] for det in detections if det["class_name"] == "person"]
 
-        Parameters
-        ----------
-        detections : list[dict]
-            Detection list — **should already be ROI-filtered** by the
-            caller if ``roi_only`` is enabled.
-        bev_matrix : (3, 3) ndarray or None
-        roi_polygon : (N, 2) ndarray or None
-        bev_enabled : bool
-
-        Returns
-        -------
-        list[dict]
-        """
-        # ---- 1. Extract motorcycle bottom-center points ----
-        mc_points_orig: List[Tuple[float, float]] = []
-
+        # ---- 1. Extract Candidates and Deduplicate (Custom NMS) ----
+        mc_candidates: List[Dict] = []
         for det in detections:
-            if det["class_name"] != "motorcycle":
-                continue
+            if det["class_name"] == "motorcycle":
+                mc_candidates.append(det)
+
+        # Confidence-based Custom NMS
+        mc_points_orig = []
+        # Sort candidates by confidence descending
+        mc_candidates.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
+        
+        for det in mc_candidates:
             bc = det["ground_point"]
-            mc_points_orig.append(bc)
+            
+            # Check Euclidean distance in original space to avoid overlapping bounding boxes
+            is_duplicate = False
+            for existing_pt in mc_points_orig:
+                dist = np.hypot(bc[0] - existing_pt[0], bc[1] - existing_pt[1])
+                if dist < 30.0:  # 30px threshold for duplicates
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
+                mc_points_orig.append(bc)
 
         if len(mc_points_orig) < 2:
             self._gap_history.clear()
@@ -116,47 +118,43 @@ class GapAnalyzer:
 
         pts_array = np.array(mc_points_orig, dtype=np.float32)
 
-        # ---- 2. BEV transform ----
+        # ---- 2. ROI filter (secondary safety net) ----
+        if roi_polygon is not None:
+            keep_mask = [
+                point_in_polygon(tuple(pt), roi_polygon) for pt in pts_array
+            ]
+            pts_array = pts_array[keep_mask]
+
+        if len(pts_array) < 2:
+            self._gap_history.clear()
+            self._prev_gap_count = 0
+            return []
+
+        # ---- 3. Linear Sort by X-axis (original space) ----
+        # Guaranteed no crossing diagonal lines
+        order = np.argsort(pts_array[:, 0])
+        pts_array = pts_array[order]
+
+        # ---- 4. BEV transform ----
         if bev_enabled and bev_matrix is not None:
             pts_bev = transform_points(pts_array, bev_matrix)
         else:
             pts_bev = pts_array.copy()
 
-        # ---- 3. ROI filter (secondary safety net) ----
-        if roi_polygon is not None:
-            keep_mask = [
-                point_in_polygon(tuple(pt), roi_polygon) for pt in pts_array
-            ]
-            pts_bev = pts_bev[keep_mask]
-            pts_array = pts_array[keep_mask]
-
-        if len(pts_bev) < 2:
-            self._gap_history.clear()
-            self._prev_gap_count = 0
-            return []
-
-        # ---- 4. Sort by dominant axis ----
-        spread_x = np.ptp(pts_bev[:, 0])
-        spread_y = np.ptp(pts_bev[:, 1])
-        sort_axis = 0 if spread_x >= spread_y else 1
-        order = np.argsort(pts_bev[:, sort_axis])
-        pts_bev = pts_bev[order]
-        pts_array = pts_array[order]
-
-        # ---- 5. Euclidean distances between adjacent ----
+        # ---- 5. Euclidean distances between adjacent pairs on BEV ----
         diffs = np.diff(pts_bev, axis=0)
-        distances = np.linalg.norm(diffs, axis=1)
-        print(f"[DEBUG GAP] sort_axis={sort_axis}, distances: {np.round(distances)}")
+        distances_bev = np.linalg.norm(diffs, axis=1)
 
         # ---- 6 & 7. Threshold + temporal smoothing ----
         new_history: Dict[int, int] = defaultdict(int)
         gaps: List[Dict] = []
 
-        for i, dist in enumerate(distances):
-            # Must be within [min_gap, max_gap]
-            if dist < self.min_gap:
-                continue
-            if self.max_gap is not None and dist > self.max_gap:
+        for i, dist_bev in enumerate(distances_bev):
+            # Calculate physical meters
+            dist_meters = dist_bev / self.bev_pixels_per_meter
+
+            # Compare to threshold in meters
+            if dist_meters < self.gap_threshold_meters or dist_meters > 2.5:
                 continue
 
             prev_count = self._gap_history.get(i, 0)
@@ -174,19 +172,18 @@ class GapAnalyzer:
                 "midpoint_bev": tuple(mid_bev.tolist()),
                 "pt1": tuple(pts_array[i].tolist()),
                 "pt2": tuple(pts_array[i + 1].tolist()),
-                "distance": float(dist),
+                "distance_m": float(dist_meters),
+                "distance_bev": float(dist_bev),
                 "status": status,
             })
 
         self._gap_history = new_history
         self._prev_gap_count = len(gaps)
 
-        # ---- Cap the number of displayed available gaps ----
         if self.max_display is not None:
             available = [g for g in gaps if g["status"] == "available"]
             smoothing = [g for g in gaps if g["status"] == "smoothing"]
-            # Keep only top N available (sorted by distance, largest first)
-            available.sort(key=lambda g: g["distance"], reverse=True)
+            available.sort(key=lambda g: g["distance_m"], reverse=True)
             gaps = available[: self.max_display] + smoothing
 
         return gaps
@@ -201,13 +198,6 @@ def draw_gaps(
 ) -> np.ndarray:
     """
     Draw gap markers on *frame*.
-
-    Parameters
-    ----------
-    draw_labels : bool
-        If False, only draw a circle marker (no text).
-    draw_distance : bool
-        If False, suppress the "NNNpx" distance label.
     """
     for gap in gaps:
         mx, my = int(gap["midpoint"][0]), int(gap["midpoint"][1])
@@ -222,7 +212,7 @@ def draw_gaps(
             if draw_labels:
                 text = "GAP"
                 if draw_distance:
-                    text += f" ({gap['distance']:.0f}px)"
+                    text += f": ~{gap.get('distance_m', 0.0):.1f}m"
                     
                 # Text background
                 (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
@@ -239,8 +229,6 @@ def draw_gaps(
                     2,
                     cv2.LINE_AA,
                 )
-        # "smoothing" gaps are NOT drawn at all in demo mode
-        # (the caller can still access them via the returned list)
 
     return frame
 

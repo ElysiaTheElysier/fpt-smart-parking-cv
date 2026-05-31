@@ -33,6 +33,11 @@ def parse_args():
         default="backend/config.yaml",
         help="Path to the YAML config file (default: backend/config.yaml).",
     )
+    parser.add_argument(
+        "--show-cv2",
+        action="store_true",
+        help="Bypass Streamlit rendering and show real-time video using cv2.imshow for maximum FPS.",
+    )
     return parser.parse_args()
 
 
@@ -44,6 +49,8 @@ def main():
         config_path = os.path.join(_PROJECT_ROOT, config_path)
 
     config = load_config(config_path)
+    # Inject show_cv2 directly into config or pass to processor
+    config["show_cv2"] = args.show_cv2
     processor = VideoProcessor(config)
     processor.process()
 

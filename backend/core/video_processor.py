@@ -49,8 +49,9 @@ from backend.core.utils import (
 class VideoProcessor:
     """End-to-end video processing pipeline."""
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: Dict[str, Any], frame_queue=None) -> None:
         self.cfg = config
+        self.frame_queue = frame_queue
         self.project_root: str = config.get("_project_root", ".")
 
         # ── Detector ─────────────────────────────────────────────────
@@ -110,7 +111,8 @@ class VideoProcessor:
 
         # ── Gap analyser ─────────────────────────────────────────────
         self.gap_analyzer = GapAnalyzer(
-            gap_threshold=float(config.get("gap_threshold_pixels", 120)),
+            gap_threshold_meters=float(config.get("gap_threshold_meters", 0.8)),
+            bev_pixels_per_meter=float(config.get("bev_pixels_per_meter", 200)),
             min_gap_pixels=config.get("min_gap_pixels"),
             max_gap_pixels=config.get("max_gap_pixels"),
             min_gap_frames=int(config.get("min_gap_frames", 5)),
@@ -123,6 +125,9 @@ class VideoProcessor:
         self.show_person: bool = config.get("show_person", True)
         self.show_tracks: bool = config.get("show_tracks", True)
         self.save_metrics: bool = config.get("save_metrics", True)
+        self.show_cv2: bool = config.get("show_cv2", False)
+        
+        self._cached_gaps = []
 
     # ==================================================================
     #  ROI filtering
@@ -221,21 +226,25 @@ class VideoProcessor:
                 detections = self._filter_by_roi(raw_detections)
                 last_detections = detections
                 processed_count += 1
-
-                # Gap analysis (detections are already ROI-filtered)
-                if self.gap_enabled:
-                    gaps = self.gap_analyzer.update(
-                        detections,
-                        self.bev_matrix,
-                        self.roi_polygon,
-                        self.bev_enabled,
-                    )
-                else:
-                    gaps = []
-                last_gaps = gaps
             else:
                 detections = last_detections
-                gaps = last_gaps
+
+            # ── Gap measurement ──────────────────────────────────────
+            available_gaps = 0
+            if self.gap_enabled:
+                if frame_idx % 3 == 0:
+                    gaps = self.gap_analyzer.update(
+                        detections=detections,
+                        bev_matrix=self.bev_matrix,
+                        roi_polygon=self.roi_polygon if self.roi_only else None,
+                        bev_enabled=self.bev_enabled
+                    )
+                    self._cached_gaps = gaps
+                else:
+                    gaps = self._cached_gaps
+                available_gaps = sum(1 for g in gaps if g["status"] == "available")
+            else:
+                gaps = []
 
             # ── Counts (ROI-filtered only) ───────────────────────────
             mc_count = sum(1 for d in detections if d["class_name"] == "motorcycle")
@@ -282,9 +291,9 @@ class VideoProcessor:
 
             # HUD
             elapsed = time.time() - t_start
-            proc_fps = processed_count / elapsed if elapsed > 0 else 0.0
+            video_fps = frame_idx / elapsed if elapsed > 0 else 0.0
             self._draw_hud(
-                annotated, frame_idx, timestamp, proc_fps,
+                annotated, frame_idx, timestamp, video_fps,
                 mc_count, person_count, available_gaps,
             )
 
@@ -320,7 +329,16 @@ class VideoProcessor:
                 y_off = h_main - mini_h - 20
                 x_off = w_main - mini_w - 20
                 annotated[y_off:y_off+mini_h, x_off:x_off+mini_w] = bev_mini
-            out.write(annotated)
+            
+            if self.frame_queue is not None:
+                # If queue is full, this will block and throttle the producer
+                self.frame_queue.put(annotated.copy())
+            elif self.show_cv2:
+                cv2.imshow("Tracking", annotated)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            else:
+                out.write(annotated)
 
             # ── Save one debug screenshot ────────────────────────────
             if not debug_screenshot_saved and processed_count >= 5:
@@ -337,7 +355,7 @@ class VideoProcessor:
                 metrics_rows.append({
                     "frame_idx": frame_idx,
                     "timestamp": round(timestamp, 3),
-                    "fps": round(proc_fps, 2),
+                    "fps": round(video_fps, 2),
                     "motorcycle_count": mc_count,
                     "person_count": person_count,
                     "available_gap_count": available_gaps,
@@ -348,7 +366,8 @@ class VideoProcessor:
                         "frame_idx": frame_idx,
                         "timestamp": round(timestamp, 3),
                         "gap_id": gap["gap_id"],
-                        "gap_distance_pixels": round(gap["distance"], 1),
+                        "gap_distance_bev": round(gap["distance_bev"], 1),
+                        "gap_distance_meters": round(gap["distance_m"], 2),
                         "status": gap["status"],
                     })
 
@@ -360,23 +379,31 @@ class VideoProcessor:
 
             frame_idx += 1
 
-        cap.release()
-        out.release()
+        cap.stop()
+        
+        if self.frame_queue is not None:
+            self.frame_queue.put(None) # Sentinel
+
+        if not self.show_cv2 and self.frame_queue is None:
+            out.release()
+        elif self.show_cv2:
+            cv2.destroyAllWindows()
 
         # ── Convert to H.264 for web compatibility ───────────────────
-        print(f"[INFO] Converting video to H.264 for web playback...")
-        try:
-            reader = imageio.get_reader(temp_output_path)
-            writer = imageio.get_writer(output_path, fps=fps, codec='libx264')
-            for frame in reader:
-                writer.append_data(frame)
-            writer.close()
-            reader.close()
-            os.remove(temp_output_path)
-            print(f"[DONE] Annotated video saved to: {output_path}")
-        except Exception as e:
-            print(f"[ERROR] Video conversion failed: {e}")
-            print(f"[INFO] Fallback: Please view the raw video at {temp_output_path}")
+        if not self.show_cv2 and self.frame_queue is None:
+            print(f"[INFO] Converting video to H.264 for web playback...")
+            try:
+                reader = imageio.get_reader(temp_output_path)
+                writer = imageio.get_writer(output_path, fps=fps, codec='libx264')
+                for frame in reader:
+                    writer.append_data(frame)
+                writer.close()
+                reader.close()
+                os.remove(temp_output_path)
+                print(f"[DONE] Annotated video saved to: {output_path}")
+            except Exception as e:
+                print(f"[ERROR] Video conversion failed: {e}")
+                print(f"[INFO] Fallback: Please view the raw video at {temp_output_path}")
 
         # ── Save metrics ─────────────────────────────────────────────
         if self.save_metrics:

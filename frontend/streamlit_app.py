@@ -13,6 +13,9 @@ import subprocess
 
 import streamlit as st
 import pandas as pd
+import queue
+import threading
+import cv2
 
 # ---------------------------------------------------------------------------
 # Ensure project root is on sys.path
@@ -21,6 +24,9 @@ _FRONTEND_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_FRONTEND_DIR)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
+
+from backend.core.utils import load_config
+from backend.core.video_processor import VideoProcessor
 
 
 # ── Page config ──────────────────────────────────────────────────────────────
@@ -68,29 +74,39 @@ with col1:
     run_btn = st.button("▶️ Run Inference", type="primary")
 
 if run_btn:
-    with st.spinner("Đang xử lý video... (có thể mất vài phút)"):
-        cmd = [
-            sys.executable,
-            os.path.join(_PROJECT_ROOT, "scripts", "run_inference.py"),
-            "--config", config_abs,
-        ]
-        result = subprocess.run(
-            cmd,
-            cwd=_PROJECT_ROOT,
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode == 0:
-            st.success("✅ Inference hoàn tất!")
-        else:
-            st.error("❌ Inference thất bại!")
-
-        with st.expander("📋 Log chi tiết", expanded=result.returncode != 0):
-            if result.stdout:
-                st.code(result.stdout, language="text")
-            if result.stderr:
-                st.code(result.stderr, language="text")
+    st.info("Đang xử lý video qua Multithreading (Producer-Consumer)...")
+    
+    # Setup queue
+    frame_queue = queue.Queue(maxsize=5)
+    config = load_config(config_abs)
+    
+    # Force don't show_cv2 for Streamlit UI
+    config["show_cv2"] = False
+    
+    def producer(cfg, q):
+        try:
+            vp = VideoProcessor(cfg, frame_queue=q)
+            vp.process()
+        except Exception as e:
+            print(f"[ERROR] Producer thread failed: {e}")
+            q.put(None)
+            
+    # Start producer thread
+    t = threading.Thread(target=producer, args=(config, frame_queue), daemon=True)
+    t.start()
+    
+    # Streamlit image placeholder
+    st_frame = st.empty()
+    
+    while True:
+        frame = frame_queue.get()
+        if frame is None:
+            break
+        # Convert BGR to RGB for Streamlit
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        st_frame.image(frame_rgb, channels="RGB", use_container_width=True)
+        
+    st.success("✅ Inference hoàn tất!")
 
 st.divider()
 

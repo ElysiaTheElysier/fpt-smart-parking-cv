@@ -1,0 +1,5 @@
+# AI Assistant Rules for fpt-smart-parking-cv
+
+1. Always use the project's virtual environment for running Python scripts or Streamlit.
+2. The python executable path is `venv/Scripts/python.exe` (on Windows).
+3. Do not ask for user permission when running `venv/Scripts/python.exe` or executing inference/streamlit tasks. Run them automatically to save time.

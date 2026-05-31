@@ -23,8 +23,19 @@ class YOLODetector:
         pretrained: str = config.get("pretrained_model", "yolov8n.pt")
 
         if os.path.isfile(model_path):
-            print(f"[INFO] Loading custom model: {model_path}")
-            self.model = YOLO(model_path)
+            engine_path = model_path.replace(".pt", ".engine")
+            
+            if not os.path.isfile(engine_path):
+                print(f"[INFO] Exporting {model_path} to TensorRT engine...")
+                export_model = YOLO(model_path)
+                export_model.export(format="engine", half=True, workspace=4)
+                
+            if os.path.isfile(engine_path):
+                print(f"[INFO] Loading TensorRT model: {engine_path}")
+                self.model = YOLO(engine_path)
+            else:
+                print(f"[INFO] Loading custom model: {model_path}")
+                self.model = YOLO(model_path)
         else:
             print(f"[WARN] Custom model not found at {model_path}. "
                   f"Falling back to pretrained: {pretrained}")
@@ -73,6 +84,7 @@ class YOLODetector:
             iou=self.iou,
             imgsz=self.imgsz,
             classes=self.target_classes,
+            half=True,
             verbose=False,
         )
         return self._parse_results(results)
@@ -94,6 +106,7 @@ class YOLODetector:
             classes=self.target_classes,
             persist=True,       # keep state across calls
             tracker="backend/custom_botsort.yaml", # Robust tracking for occlusion with 10s buffer
+            half=True,
             verbose=False,
         )
         return self._parse_results(results)
@@ -140,5 +153,41 @@ class YOLODetector:
                 "ground_point": ground_point,
             }
             detections.append(det)
+
+        # --- Inject lost tracks from BoT-SORT ---
+        if hasattr(self.model, "predictor") and self.model.predictor is not None:
+            trackers = getattr(self.model.predictor, "trackers", [])
+            if len(trackers) > 0:
+                tracker = trackers[0]
+                lost_tracks = getattr(tracker, "lost_tracks", [])
+                for trk in lost_tracks:
+                    cls_id = int(trk.cls) if hasattr(trk, "cls") else 3
+                    if cls_id not in self.target_classes:
+                        continue
+                        
+                    if hasattr(trk, "tlwh"):
+                        x, y, w, h = trk.tlwh
+                        x1, y1, x2, y2 = x, y, x + w, y + h
+                    elif hasattr(trk, "tlbr"):
+                        x1, y1, x2, y2 = trk.tlbr
+                    else:
+                        continue
+                        
+                    track_id = int(getattr(trk, "track_id", -1))
+                    if track_id == -1:
+                        continue
+                        
+                    bbox_coords = [float(x1), float(y1), float(x2), float(y2)]
+                    ground_point = bbox_bottom_center(bbox_coords)
+
+                    det = {
+                        "class_id": cls_id,
+                        "class_name": self._class_names.get(cls_id, str(cls_id)),
+                        "confidence": 0.3, # lower conf for virtual/lost track
+                        "bbox": bbox_coords,
+                        "track_id": track_id,
+                        "ground_point": ground_point,
+                    }
+                    detections.append(det)
 
         return detections
