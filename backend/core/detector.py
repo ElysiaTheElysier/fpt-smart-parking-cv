@@ -12,6 +12,8 @@ from typing import Any, Dict, List
 import numpy as np
 from ultralytics import YOLO
 
+from backend.core.utils import bbox_bottom_center
+
 
 class YOLODetector:
     """Thin wrapper around Ultralytics YOLO for detection + tracking."""
@@ -91,6 +93,7 @@ class YOLODetector:
             imgsz=self.imgsz,
             classes=self.target_classes,
             persist=True,       # keep state across calls
+            tracker="botsort.yaml", # Robust tracking for occlusion
             verbose=False,
         )
         return self._parse_results(results)
@@ -104,17 +107,37 @@ class YOLODetector:
             return detections
 
         boxes = results[0].boxes
+        keypoints = results[0].keypoints if hasattr(results[0], 'keypoints') else None
+        
         if boxes is None:
             return detections
 
-        for box in boxes:
+        for i, box in enumerate(boxes):
             cls_id = int(box.cls.item())
+            bbox_coords = box.xyxy[0].tolist()
+            
+            # Keypoints extraction (YOLO-Pose fallback)
+            ground_point = None
+            if keypoints is not None and keypoints.data is not None and len(keypoints.data) > i:
+                obj_kpts = keypoints.data[i]
+                # Filter keypoints with confidence > 0.5
+                valid_kpts = obj_kpts[obj_kpts[:, 2] > 0.5]
+                if len(valid_kpts) > 0:
+                    # Lowest point in image (Max Y) is typically the wheel/foot
+                    lowest_pt = valid_kpts[valid_kpts[:, 1].argmax()]
+                    ground_point = (float(lowest_pt[0]), float(lowest_pt[1]))
+            
+            # Fallback to bbox bottom center if no keypoints found
+            if ground_point is None:
+                ground_point = bbox_bottom_center(bbox_coords)
+
             det = {
                 "class_id": cls_id,
                 "class_name": self._class_names.get(cls_id, str(cls_id)),
                 "confidence": float(box.conf.item()),
-                "bbox": box.xyxy[0].tolist(),  # [x1, y1, x2, y2]
+                "bbox": bbox_coords,  # [x1, y1, x2, y2]
                 "track_id": int(box.id.item()) if box.id is not None else None,
+                "ground_point": ground_point,
             }
             detections.append(det)
 

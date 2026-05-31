@@ -136,7 +136,7 @@ class VideoProcessor:
 
         filtered: List[Dict] = []
         for det in detections:
-            bc = bbox_bottom_center(det["bbox"])
+            bc = det["ground_point"]
             if point_in_polygon(bc, self.roi_polygon):
                 filtered.append(det)
         return filtered

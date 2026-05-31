@@ -106,7 +106,7 @@ class GapAnalyzer:
         for det in detections:
             if det["class_name"] != "motorcycle":
                 continue
-            bc = bbox_bottom_center(det["bbox"])
+            bc = det["ground_point"]
             mc_points_orig.append(bc)
 
         if len(mc_points_orig) < 2:

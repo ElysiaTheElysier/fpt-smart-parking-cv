@@ -6,6 +6,11 @@
 # --- Input / Output Paths ---
 video_path: data/raw_videos/input_video.mp4
 output_video_path: data/outputs/annotated_video.mp4
+# Weights for detection/tracking
+# To use YOLO-Pose for accurate wheel contact points, point `model_path` to your 
+# custom-trained Pose model for motorcycles (e.g. models/best-pose.pt).
+# If the model does not support pose or no keypoints are found, it will safely 
+# fallback to bounding box bottom center.
 model_path: models/best.pt
 pretrained_model: yolov8n.pt
 
