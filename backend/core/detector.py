@@ -93,7 +93,7 @@ class YOLODetector:
             imgsz=self.imgsz,
             classes=self.target_classes,
             persist=True,       # keep state across calls
-            tracker="botsort.yaml", # Robust tracking for occlusion
+            tracker="backend/custom_botsort.yaml", # Robust tracking for occlusion with 10s buffer
             verbose=False,
         )
         return self._parse_results(results)

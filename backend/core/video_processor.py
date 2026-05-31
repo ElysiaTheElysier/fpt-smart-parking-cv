@@ -22,6 +22,8 @@ import numpy as np
 import imageio
 import pandas as pd
 
+from backend.core.async_video import AsyncVideoCapture, AsyncVideoWriter
+
 from backend.core.bev import (
     compute_perspective_transform,
     draw_polygon as bev_draw_polygon,
@@ -150,20 +152,22 @@ class VideoProcessor:
         video_path: str = self.cfg["video_path"]
         output_path: str = self.cfg["output_video_path"]
 
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
+        # ── Async Video Reader ───────────────────────────────────────
+        cap = AsyncVideoCapture(video_path).start()
+        
+        # Test if the stream was opened (fps should be > 0)
+        fps = cap.fps
+        if fps <= 0:
             print(f"[ERROR] Cannot open video: {video_path}")
             sys.exit(1)
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
+        total_frames = cap.total_frames
         max_frames_cfg = self.cfg.get("max_frames", 0)
         if max_frames_cfg > 0:
             total_frames = min(total_frames, max_frames_cfg)
 
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        width = cap.width
+        height = cap.height
 
         print("=" * 60)
         print("VIDEO PROCESSING PIPELINE")
@@ -182,15 +186,13 @@ class VideoProcessor:
         print(f"  Output         : {output_path}")
         print("=" * 60)
 
-        # ── Video writer ─────────────────────────────────────────────
+        # ── Async Video Writer ───────────────────────────────────────
         ensure_dir(os.path.dirname(output_path))
         
-        # We write to a temporary mp4v file first, because OpenCV on Windows 
-        # often fails to write H.264 directly without extra DLLs.
         temp_output_path = output_path.replace(".mp4", "_temp.mp4")
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             
-        out = cv2.VideoWriter(temp_output_path, fourcc, fps, (width, height))
+        out = AsyncVideoWriter(temp_output_path, fourcc, fps, (width, height)).start()
 
         # ── Metrics accumulators ─────────────────────────────────────
         metrics_rows: List[Dict] = []
@@ -204,7 +206,7 @@ class VideoProcessor:
 
         t_start = time.time()
 
-        while True:
+        while cap.more():
             ret, frame = cap.read()
             if not ret or (max_frames_cfg > 0 and frame_idx >= max_frames_cfg):
                 break

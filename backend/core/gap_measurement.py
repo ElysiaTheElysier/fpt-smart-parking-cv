@@ -172,6 +172,8 @@ class GapAnalyzer:
                 "gap_id": i,
                 "midpoint": tuple(mid_orig.tolist()),
                 "midpoint_bev": tuple(mid_bev.tolist()),
+                "pt1": tuple(pts_array[i].tolist()),
+                "pt2": tuple(pts_array[i + 1].tolist()),
                 "distance": float(dist),
                 "status": status,
             })
@@ -211,21 +213,48 @@ def draw_gaps(
         mx, my = int(gap["midpoint"][0]), int(gap["midpoint"][1])
 
         if gap["status"] == "available":
-            cv2.circle(frame, (mx, my), radius, COLOR_GAP_AVAILABLE, 2)
+            pt1 = (int(gap["pt1"][0]), int(gap["pt1"][1]))
+            pt2 = (int(gap["pt2"][0]), int(gap["pt2"][1]))
+            
+            # Draw dashed yellow line between the two bikes
+            draw_dashed_line(frame, pt1, pt2, (0, 215, 255), thickness=3, dash_length=15)
 
-            if draw_labels and draw_distance:
-                dist_text = f"{gap['distance']:.0f}px"
+            if draw_labels:
+                text = "GAP"
+                if draw_distance:
+                    text += f" ({gap['distance']:.0f}px)"
+                    
+                # Text background
+                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                cv2.rectangle(frame, (mx - tw//2 - 5, my - th//2 - 5), (mx + tw//2 + 5, my + th//2 + 5), (0, 0, 0), -1)
+                
+                # Text foreground
                 cv2.putText(
                     frame,
-                    dist_text,
-                    (mx + radius + 4, my + 5),
+                    text,
+                    (mx - tw//2, my + th//2),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    COLOR_GAP_AVAILABLE,
-                    1,
+                    0.6,
+                    (0, 215, 255),
+                    2,
                     cv2.LINE_AA,
                 )
         # "smoothing" gaps are NOT drawn at all in demo mode
         # (the caller can still access them via the returned list)
 
     return frame
+
+def draw_dashed_line(img, pt1, pt2, color, thickness=1, dash_length=10):
+    dist = np.hypot(pt2[0] - pt1[0], pt2[1] - pt1[1])
+    dashes = max(1, int(dist / dash_length))
+    for i in range(dashes):
+        if i % 2 == 0:  # draw every other segment
+            start = (
+                int(pt1[0] + (pt2[0] - pt1[0]) * (i / dashes)),
+                int(pt1[1] + (pt2[1] - pt1[1]) * (i / dashes))
+            )
+            end = (
+                int(pt1[0] + (pt2[0] - pt1[0]) * ((i + 1) / dashes)),
+                int(pt1[1] + (pt2[1] - pt1[1]) * ((i + 1) / dashes))
+            )
+            cv2.line(img, start, end, color, thickness)
