@@ -216,25 +216,34 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-@"
-
 # Python
 venv/
 __pycache__/
 *.pyc
+*.engine
 
 # Videos and generated data
 *.mp4
 *.mov
 *.avi
 data/raw_videos/*
-data/extracted_frames/
-data/roboflow_upload/
+!data/raw_videos/.gitkeep
+data/extracted_frames/*
+!data/extracted_frames/.gitkeep
+data/roboflow_upload/*
+!data/roboflow_upload/.gitkeep
 data/outputs/*
-runs/
+!data/outputs/.gitkeep
+runs/*
+!runs/.gitkeep
+
+# Models
+models/*
+!models/.gitkeep
+!models/best.pt
+!models/best.engine
 
 # YOLO downloaded/pretrained weights
 yolov8n.pt
-*.pt
-!models/.gitkeep
-"@ | Add-Content .gitignore
+yolov8n.onnx
+*.onnx
