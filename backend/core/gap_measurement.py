@@ -57,7 +57,7 @@ class GapAnalyzer:
     """
     def __init__(
         self,
-        gap_threshold_meters: float = 0.8,
+        gap_threshold_meters: float = 1.3,
         bev_pixels_per_meter: float = 200.0,
         min_gap_pixels: Optional[float] = None,
         max_gap_pixels: Optional[float] = None,
@@ -75,6 +75,8 @@ class GapAnalyzer:
 
         self._gap_history: Dict[int, int] = defaultdict(int)
         self._prev_gap_count: int = 0
+        # Person Freeze: store last stable gaps computed when no persons were present
+        self._stable_gaps: List[Dict] = []
 
     def update(
         self,
@@ -83,8 +85,12 @@ class GapAnalyzer:
         roi_polygon: Optional[np.ndarray],
         bev_enabled: bool = True,
     ) -> List[Dict]:
-        
-        person_boxes = [det["bbox"] for det in detections if det["class_name"] == "person"]
+
+        person_count = sum(1 for det in detections if det["class_name"] == "person")
+
+        # ── Person Freeze: if any person is in the scene, return last stable gaps ──
+        if person_count > 0:
+            return self._stable_gaps
 
         # ---- 1. Extract Candidates and Deduplicate (Custom NMS) ----
         mc_candidates: List[Dict] = []
@@ -94,10 +100,21 @@ class GapAnalyzer:
 
         # Confidence-based Custom NMS
         mc_points_orig = []
+
         # Sort candidates by confidence descending
         mc_candidates.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
         
+        filtered_candidates = []
         for det in mc_candidates:
+            is_overlap = False
+            for existing_det in filtered_candidates:
+                if calculate_iou(det["bbox"], existing_det["bbox"]) > 0.45:
+                    is_overlap = True
+                    break
+            if not is_overlap:
+                filtered_candidates.append(det)
+        
+        for det in filtered_candidates:
             bc = det["ground_point"]
             
             # Check Euclidean distance in original space to avoid overlapping bounding boxes
@@ -114,6 +131,7 @@ class GapAnalyzer:
         if len(mc_points_orig) < 2:
             self._gap_history.clear()
             self._prev_gap_count = 0
+            self._stable_gaps = []
             return []
 
         pts_array = np.array(mc_points_orig, dtype=np.float32)
@@ -128,6 +146,7 @@ class GapAnalyzer:
         if len(pts_array) < 2:
             self._gap_history.clear()
             self._prev_gap_count = 0
+            self._stable_gaps = []
             return []
 
         # ---- 3. Linear Sort by X-axis (original space) ----
@@ -155,6 +174,10 @@ class GapAnalyzer:
 
             # Compare to threshold in meters
             if dist_meters < self.gap_threshold_meters or dist_meters > 2.5:
+                continue
+                
+            # Vertical gap blocker: Y-distance in BEV must not exceed 1.5 meters
+            if abs(pts_bev[i][1] - pts_bev[i + 1][1]) > 1.5 * self.bev_pixels_per_meter:
                 continue
 
             prev_count = self._gap_history.get(i, 0)
@@ -185,6 +208,9 @@ class GapAnalyzer:
             smoothing = [g for g in gaps if g["status"] == "smoothing"]
             available.sort(key=lambda g: g["distance_m"], reverse=True)
             gaps = available[: self.max_display] + smoothing
+
+        # Update stable gaps (person-free snapshot)
+        self._stable_gaps = gaps
 
         return gaps
 

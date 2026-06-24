@@ -72,9 +72,9 @@ class AsyncVideoWriter:
         self.stopped = False
         
     def start(self):
-        t = threading.Thread(target=self.update, args=())
-        t.daemon = True
-        t.start()
+        self.thread = threading.Thread(target=self.update, args=())
+        self.thread.daemon = True
+        self.thread.start()
         return self
         
     def update(self):
@@ -91,7 +91,6 @@ class AsyncVideoWriter:
         
     def release(self):
         self.stopped = True
-        # Wait for queue to empty
-        while not self.Q.empty():
-            time.sleep(0.1)
+        if hasattr(self, 'thread'):
+            self.thread.join()
         self.writer.release()
