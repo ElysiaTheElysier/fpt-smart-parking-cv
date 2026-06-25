@@ -12,7 +12,7 @@ output_video_path: data/outputs/annotated_video.mp4
 # If the model does not support pose or no keypoints are found, it will safely 
 # fallback to bounding box bottom center.
 model_path: models/best.pt
-pretrained_model: yolov8n.pt
+pretrained_model: yolov8x-seg.pt
 
 # --- Frame Extraction ---
 frame_extract_fps: 1
@@ -25,7 +25,7 @@ iou_threshold: 0.7
 inference_imgsz: 1280
 inference_stride: 1
 # Maximum number of frames to process (useful for quick demos). Set to 0 to process all.
-max_frames: 0
+max_frames: 3600
 
 # COCO class IDs used by YOLOv8 pretrained model
 classes:

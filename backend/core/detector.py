@@ -121,6 +121,7 @@ class YOLODetector:
 
         boxes = results[0].boxes
         keypoints = results[0].keypoints if hasattr(results[0], 'keypoints') else None
+        masks_xy = results[0].masks.xy if hasattr(results[0], 'masks') and results[0].masks is not None else None
         
         if boxes is None:
             return detections
@@ -129,18 +130,29 @@ class YOLODetector:
             cls_id = int(box.cls.item())
             bbox_coords = box.xyxy[0].tolist()
             
-            # Keypoints extraction (YOLO-Pose fallback)
             ground_point = None
-            if keypoints is not None and keypoints.data is not None and len(keypoints.data) > i:
+            
+            mask_points = None
+            
+            # 1. Segmentation Mask Extraction (Highest Priority)
+            if masks_xy is not None and len(masks_xy) > i:
+                segment = masks_xy[i]
+                if len(segment) > 0:
+                    mask_points = segment
+                    # Lowest point in image (Max Y) of the mask contour
+                    lowest_pt = segment[segment[:, 1].argmax()]
+                    ground_point = (float(lowest_pt[0]), float(lowest_pt[1]))
+            
+            # 2. Keypoints extraction (YOLO-Pose fallback)
+            if ground_point is None and keypoints is not None and keypoints.data is not None and len(keypoints.data) > i:
                 obj_kpts = keypoints.data[i]
                 # Filter keypoints with confidence > 0.5
                 valid_kpts = obj_kpts[obj_kpts[:, 2] > 0.5]
                 if len(valid_kpts) > 0:
-                    # Lowest point in image (Max Y) is typically the wheel/foot
                     lowest_pt = valid_kpts[valid_kpts[:, 1].argmax()]
                     ground_point = (float(lowest_pt[0]), float(lowest_pt[1]))
             
-            # Fallback to bbox bottom center if no keypoints found
+            # 3. Fallback to bbox bottom center if no masks or keypoints found
             if ground_point is None:
                 ground_point = bbox_bottom_center(bbox_coords)
 
@@ -151,6 +163,7 @@ class YOLODetector:
                 "bbox": bbox_coords,  # [x1, y1, x2, y2]
                 "track_id": int(box.id.item()) if box.id is not None else None,
                 "ground_point": ground_point,
+                "mask": mask_points, # Polygon points for segmentation mask
             }
             detections.append(det)
 

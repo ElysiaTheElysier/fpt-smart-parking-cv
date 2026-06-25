@@ -442,19 +442,44 @@ class VideoProcessor:
     def _draw_detections(
         self, frame: np.ndarray, detections: List[Dict]
     ) -> None:
-        """Draw bounding boxes, labels, confidence, and track IDs."""
+        """Draw bounding boxes, masks, labels, confidence, and track IDs."""
+        overlay = frame.copy()
+        has_mask = False
+
+        # Pass 1: Draw masks or boxes on overlay
         for det in detections:
             cls_name = det["class_name"]
             if cls_name == "person" and not self.show_person:
                 continue
 
+            color = COLOR_MOTORCYCLE if cls_name == "motorcycle" else COLOR_PERSON
+            
+            mask_pts = det.get("mask")
+            if mask_pts is not None:
+                has_mask = True
+                pts = np.array(mask_pts, np.int32).reshape((-1, 1, 2))
+                cv2.fillPoly(overlay, [pts], color)
+                cv2.polylines(frame, [pts], True, color, 2)
+            else:
+                bbox = det["bbox"]
+                x1, y1, x2, y2 = [int(v) for v in bbox]
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+
+        # Blend overlay for translucent masks
+        if has_mask:
+            cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
+
+        # Pass 2: Draw labels (so they are solid and on top)
+        for det in detections:
+            cls_name = det["class_name"]
+            if cls_name == "person" and not self.show_person:
+                continue
+                
             bbox = det["bbox"]
             x1, y1, x2, y2 = [int(v) for v in bbox]
             conf = det["confidence"]
             track_id = det.get("track_id")
-
             color = COLOR_MOTORCYCLE if cls_name == "motorcycle" else COLOR_PERSON
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
             # Label string
             parts = [f"{cls_name} {conf:.2f}"]
