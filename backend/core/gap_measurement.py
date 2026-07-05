@@ -64,6 +64,7 @@ class GapAnalyzer:
         min_gap_frames: int = 5,
         smoothing_window: int = 5,
         max_display: Optional[int] = None,
+        exclusion_zones: Optional[List[np.ndarray]] = None,
     ) -> None:
         self.gap_threshold_meters = gap_threshold_meters
         self.bev_pixels_per_meter = bev_pixels_per_meter
@@ -72,11 +73,62 @@ class GapAnalyzer:
         self.min_gap_frames = min_gap_frames
         self.smoothing_window = smoothing_window
         self.max_display = max_display
+        self.exclusion_zones = exclusion_zones or []
 
         self._gap_history: Dict[int, int] = defaultdict(int)
         self._prev_gap_count: int = 0
         # Person Freeze: store last stable gaps computed when no persons were present
         self._stable_gaps: List[Dict] = []
+
+    def _midpoint_in_exclusion_zone(self, midpoint: Tuple[float, float]) -> bool:
+        """Check if a gap midpoint falls inside any exclusion zone polygon."""
+        for zone in self.exclusion_zones:
+            if point_in_polygon(midpoint, zone):
+                return True
+        return False
+
+    def _gap_overlaps_any_bbox(
+        self,
+        pt1_orig: np.ndarray,
+        pt2_orig: np.ndarray,
+        all_bboxes: List[List[float]],
+        pair_indices: Tuple[int, int],
+    ) -> bool:
+        """
+        Check if any motorcycle bbox (other than the two forming this gap)
+        overlaps with the virtual gap region.
+        
+        The virtual gap box spans from the right edge of the left bike's bbox
+        to the left edge of the right bike's bbox, vertically covering the
+        union of both bboxes' Y ranges.
+        """
+        idx_a, idx_b = pair_indices
+        if len(all_bboxes) < 3:
+            return False
+
+        # Get the bboxes of the two gap-forming bikes
+        bbox_a = all_bboxes[idx_a]
+        bbox_b = all_bboxes[idx_b]
+
+        # Virtual gap box: from right edge of left bike to left edge of right bike
+        gap_x1 = min(bbox_a[2], bbox_b[2])  # right edge of left bike
+        gap_x2 = max(bbox_a[0], bbox_b[0])  # left edge of right bike
+        gap_y1 = min(bbox_a[1], bbox_b[1])
+        gap_y2 = max(bbox_a[3], bbox_b[3])
+
+        # Ensure valid box
+        if gap_x1 >= gap_x2 or gap_y1 >= gap_y2:
+            return False
+
+        gap_box = [gap_x1, gap_y1, gap_x2, gap_y2]
+
+        for k, bbox in enumerate(all_bboxes):
+            if k == idx_a or k == idx_b:
+                continue
+            iou = calculate_iou(gap_box, bbox)
+            if iou > 0.0:
+                return True
+        return False
 
     def update(
         self,
@@ -100,6 +152,7 @@ class GapAnalyzer:
 
         # Confidence-based Custom NMS
         mc_points_orig = []
+        mc_bboxes = []  # Track bboxes in parallel for overlap checking
 
         # Sort candidates by confidence descending
         mc_candidates.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
@@ -127,6 +180,7 @@ class GapAnalyzer:
             
             if not is_duplicate:
                 mc_points_orig.append(bc)
+                mc_bboxes.append(det["bbox"])
 
         if len(mc_points_orig) < 2:
             self._gap_history.clear()
@@ -142,6 +196,7 @@ class GapAnalyzer:
                 point_in_polygon(tuple(pt), roi_polygon) for pt in pts_array
             ]
             pts_array = pts_array[keep_mask]
+            mc_bboxes = [b for b, k in zip(mc_bboxes, keep_mask) if k]
 
         if len(pts_array) < 2:
             self._gap_history.clear()
@@ -153,6 +208,7 @@ class GapAnalyzer:
         # Guaranteed no crossing diagonal lines
         order = np.argsort(pts_array[:, 0])
         pts_array = pts_array[order]
+        mc_bboxes = [mc_bboxes[o] for o in order]
 
         # ---- 4. BEV transform ----
         if bev_enabled and bev_matrix is not None:
@@ -180,12 +236,24 @@ class GapAnalyzer:
             if abs(pts_bev[i][1] - pts_bev[i + 1][1]) > 1.5 * self.bev_pixels_per_meter:
                 continue
 
+            mid_orig = (pts_array[i] + pts_array[i + 1]) / 2.0
+
+            # ── Exclusion Zone Check ──
+            if self._midpoint_in_exclusion_zone(tuple(mid_orig.tolist())):
+                continue
+
+            # ── BBox Overlap Check ──
+            if self._gap_overlaps_any_bbox(
+                pts_array[i], pts_array[i + 1],
+                mc_bboxes, (i, i + 1)
+            ):
+                continue
+
             prev_count = self._gap_history.get(i, 0)
             count = prev_count + 1
             new_history[i] = count
 
             mid_bev = (pts_bev[i] + pts_bev[i + 1]) / 2.0
-            mid_orig = (pts_array[i] + pts_array[i + 1]) / 2.0
 
             status = "available" if count >= self.min_gap_frames else "smoothing"
 

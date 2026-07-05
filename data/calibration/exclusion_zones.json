@@ -1,0 +1,24 @@
+{
+  "zones": [
+    {
+      "name": "tree_left",
+      "description": "Thân cây bên trái chắn không thể đỗ xe",
+      "points": [
+        [370, 450],
+        [490, 450],
+        [490, 780],
+        [370, 780]
+      ]
+    },
+    {
+      "name": "pillar_center",
+      "description": "Trụ sắt giữa bãi xe",
+      "points": [
+        [680, 400],
+        [780, 400],
+        [780, 750],
+        [680, 750]
+      ]
+    }
+  ]
+}

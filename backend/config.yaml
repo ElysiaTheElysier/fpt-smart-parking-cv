@@ -11,7 +11,7 @@ output_video_path: data/outputs/annotated_video.mp4
 # custom-trained Pose model for motorcycles (e.g. models/best-pose.pt).
 # If the model does not support pose or no keypoints are found, it will safely 
 # fallback to bounding box bottom center.
-model_path: models/best.pt
+model_path: "models/best.pt"
 pretrained_model: yolov8x-seg.pt
 
 # --- Frame Extraction ---
@@ -21,11 +21,12 @@ frame_extract_fps: 1
 confidence_threshold: 0.25
 # Raised NMS IoU so overlapping boxes in dense parking are NOT suppressed
 iou_threshold: 0.7
-# Larger input size helps detect small / distant bikes (default 640)
+# Inference resolution. Lower = faster, higher = better small object detection
 inference_imgsz: 1280
 inference_stride: 1
 # Maximum number of frames to process (useful for quick demos). Set to 0 to process all.
 max_frames: 3600
+show_cv2: false
 
 # COCO class IDs used by YOLOv8 pretrained model
 classes:
@@ -73,7 +74,7 @@ temporal_smoothing_window: 5
 
 # A gap must persist for at least this many consecutive frames
 # before it is reported as "available" (reduces flickering).
-min_gap_frames: 2
+min_gap_frames: 15
 
 # If false, gap markers are drawn as small circles without distance text
 draw_gap_labels: true

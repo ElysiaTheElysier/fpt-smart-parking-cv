@@ -109,6 +109,20 @@ class VideoProcessor:
         self.draw_gap_distance: bool = config.get("draw_gap_distance", True)
         self.draw_roi_fill: bool = config.get("draw_roi_fill", True)
 
+        # ── Exclusion Zones (areas where gaps are impossible) ────────
+        self.exclusion_zones: List[np.ndarray] = []
+        ez_path = os.path.join(
+            self.project_root, "data", "calibration", "exclusion_zones.json"
+        )
+        if os.path.exists(ez_path):
+            import json
+            with open(ez_path, "r") as f:
+                ez_data = json.load(f)
+            for zone in ez_data.get("zones", []):
+                pts = np.array(zone["points"], dtype=np.float32)
+                self.exclusion_zones.append(pts)
+            print(f"[INFO] Loaded {len(self.exclusion_zones)} exclusion zone(s).")
+
         # ── Gap analyser ─────────────────────────────────────────────
         self.gap_analyzer = GapAnalyzer(
             gap_threshold_meters=float(config.get("gap_threshold_meters", 0.8)),
@@ -118,6 +132,7 @@ class VideoProcessor:
             min_gap_frames=int(config.get("min_gap_frames", 5)),
             smoothing_window=int(config.get("temporal_smoothing_window", 5)),
             max_display=config.get("max_display_gaps"),
+            exclusion_zones=self.exclusion_zones,
         )
 
         # ── Misc config ─────────────────────────────────────────────

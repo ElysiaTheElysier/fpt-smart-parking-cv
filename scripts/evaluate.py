@@ -97,11 +97,29 @@ def evaluate_gaps(gaps_path: str) -> dict:
             if statuses[i] != statuses[i - 1]:
                 status_changes += 1
 
+    # Support both old and new column names
+    if "gap_distance_bev" in df.columns:
+        avg_bev = round(df["gap_distance_bev"].mean(), 1)
+    elif "gap_distance_pixels" in df.columns:
+        avg_bev = round(df["gap_distance_pixels"].mean(), 1)
+    else:
+        avg_bev = 0.0
+
+    if "gap_distance_meters" in df.columns:
+        avg_m = round(df["gap_distance_meters"].mean(), 2)
+        min_m = round(df["gap_distance_meters"].min(), 2)
+        max_m = round(df["gap_distance_meters"].max(), 2)
+    else:
+        avg_m = min_m = max_m = 0.0
+
     summary = {
         "total_gap_records": len(df),
         "unique_gap_ids": int(df["gap_id"].nunique()),
         "gap_status_changes": status_changes,
-        "avg_gap_distance_px": round(df["gap_distance_pixels"].mean(), 1),
+        "avg_gap_distance_px": avg_bev,
+        "avg_gap_distance_m": avg_m,
+        "min_gap_distance_m": min_m,
+        "max_gap_distance_m": max_m,
     }
 
     return summary
@@ -173,7 +191,10 @@ def main():
     print(f"  Total gap records      : {gap_summary['total_gap_records']}")
     print(f"  Unique gap IDs         : {gap_summary['unique_gap_ids']}")
     print(f"  Gap status changes     : {gap_summary['gap_status_changes']}")
-    print(f"  Avg gap distance (px)  : {gap_summary['avg_gap_distance_px']}")
+    print(f"  Avg gap distance (BEV) : {gap_summary['avg_gap_distance_px']}")
+    print(f"  Avg gap distance (m)   : {gap_summary['avg_gap_distance_m']}")
+    print(f"  Min gap distance (m)   : {gap_summary['min_gap_distance_m']}")
+    print(f"  Max gap distance (m)   : {gap_summary['max_gap_distance_m']}")
 
     # Merge and save
     combined = {**metrics_summary, **gap_summary}

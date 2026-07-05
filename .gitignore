@@ -247,3 +247,6 @@ models/*
 yolov8n.pt
 yolov8n.onnx
 *.onnx
+
+yolov8*.pt
+
