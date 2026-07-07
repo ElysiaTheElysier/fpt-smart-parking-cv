@@ -79,7 +79,7 @@ pip install -r requirements.txt
 
 ## 📝 Thiết Lập Cấu Hình (Configuration)
 Tệp cấu hình chính của hệ thống được đặt tại `backend/config.yaml`. Một số tham số quan trọng bao gồm:
-- `pretrained_model`: Mặc định là `yolov8x.pt`. Có thể thay đổi thành `yolov8n.pt` để ưu tiên tốc độ xử lý.
+- `pretrained_model`: Mặc định là `yolov8x-seg.pt`. Có thể thay đổi thành `yolov8n-seg.pt` để ưu tiên tốc độ xử lý (Lưu ý: Bắt buộc phải có đuôi `-seg.pt` để trích xuất segmentation masks).
 - `inference_imgsz`: Độ phân giải đầu vào cho mô hình (mặc định 1280).
 - `max_frames`: Giới hạn số lượng khung hình cần xử lý.
 - `show_cv2`: Thiết lập thành `true` để hiển thị cửa sổ luồng video trong quá trình xử lý.
@@ -122,4 +122,4 @@ Biểu đồ phân tích sẽ được kết xuất tại: `data/outputs/parking
 ## 💡 Xử Lý Lỗi Phổ Biến (Troubleshooting)
 1. **Lỗi `ModuleNotFoundError`**: Kiểm tra lại quá trình cài đặt thư viện (`pip install -r requirements.txt`) và đảm bảo môi trường ảo đã được kích hoạt.
 2. **Nhiễu nhận diện khoảng trống tại khu vực tĩnh**: Cập nhật `backend/config.yaml`, tăng giá trị `min_gap_frames` lên `15` hoặc `30` và sử dụng Calibration Tool để định nghĩa lại Vùng loại trừ (Exclusion Zone) tại vị trí đó.
-3. **Hiệu năng xử lý thấp**: Điều chỉnh `config.yaml`, thay đổi `pretrained_model` thành `yolov8n.pt` và giảm `inference_imgsz` xuống `640` để cải thiện tốc độ xử lý.
+3. **Hiệu năng xử lý thấp**: Điều chỉnh `config.yaml`, thay đổi `pretrained_model` thành `yolov8n-seg.pt` và giảm `inference_imgsz` xuống `640` để cải thiện tốc độ xử lý.
