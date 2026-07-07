@@ -37,7 +37,7 @@ classes:
 roi_enabled: true
 # If true, only detections whose bottom-center is inside ROI are kept.
 # Detections outside ROI are discarded for counting, drawing, and gaps.
-roi_only: false
+roi_only: true
 
 # --- Demo Mode ---
 # When true, applies clean visual settings for presentation.

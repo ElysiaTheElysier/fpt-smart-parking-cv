@@ -116,9 +116,10 @@ class GapAnalyzer:
         gap_y1 = min(bbox_a[1], bbox_b[1])
         gap_y2 = max(bbox_a[3], bbox_b[3])
 
-        # Ensure valid box
+        # Ensure valid box - if the two bikes overlap horizontally or vertically,
+        # there is no physical gap space between them in 2D view, so suppress it.
         if gap_x1 >= gap_x2 or gap_y1 >= gap_y2:
-            return False
+            return True
 
         gap_box = [gap_x1, gap_y1, gap_x2, gap_y2]
 
