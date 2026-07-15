@@ -1,0 +1,11 @@
+# custom_botsort.yaml
+# BoT-SORT tracker configuration
+# Adapted for 10-second track retention (300 frames at 30 fps)
+
+tracker_type: bytetrack
+track_high_thresh: 0.15
+track_low_thresh: 0.05
+new_track_thresh: 0.20
+track_buffer: 300  # 10s at 30 fps
+match_thresh: 0.5
+fuse_score: False

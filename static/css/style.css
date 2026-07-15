@@ -1,0 +1,332 @@
+:root {
+    /* Color Palette - Modern Dark Theme */
+    --bg-dark: hsl(220, 20%, 8%);
+    --bg-darker: hsl(220, 25%, 5%);
+    --text-main: hsl(210, 20%, 95%);
+    --text-muted: hsl(210, 15%, 70%);
+    
+    /* Accents */
+    --accent-blue: hsl(210, 100%, 60%);
+    --accent-blue-glow: hsla(210, 100%, 60%, 0.3);
+    --accent-gold: hsl(45, 100%, 55%);
+    --accent-red: hsl(350, 80%, 60%);
+    --accent-green: hsl(140, 70%, 50%);
+
+    /* Glassmorphism variables */
+    --glass-bg: hsla(220, 20%, 15%, 0.4);
+    --glass-border: hsla(220, 20%, 40%, 0.2);
+    --glass-shadow: 0 8px 32px 0 hsla(0, 0%, 0%, 0.4);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-darker);
+    background-image: 
+        radial-gradient(at 0% 0%, hsla(210, 100%, 20%, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, hsla(45, 100%, 20%, 0.1) 0px, transparent 50%);
+    background-attachment: fixed;
+    color: var(--text-main);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+h1, h2, h3, .stat-value {
+    font-family: 'Outfit', sans-serif;
+}
+
+/* ── Layout ────────────────────────────────────────────── */
+.dashboard-container {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 24px;
+    padding: 24px;
+    height: 100vh;
+}
+
+/* ── Glassmorphism Utilities ───────────────────────────── */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: var(--glass-shadow);
+    padding: 24px;
+}
+
+/* ── Sidebar ───────────────────────────────────────────── */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    overflow-y: auto;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.brand-icon {
+    font-size: 2.5rem;
+    color: var(--accent-gold);
+    text-shadow: 0 0 15px var(--accent-gold);
+}
+
+.brand h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+.controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.btn {
+    border: none;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: white;
+}
+
+.btn-primary {
+    background: var(--accent-blue);
+    box-shadow: 0 4px 15px var(--accent-blue-glow);
+}
+.btn-primary:hover:not(:disabled) {
+    background: hsl(210, 100%, 70%);
+    transform: translateY(-2px);
+}
+
+.btn-danger {
+    background: transparent;
+    border: 1px solid var(--accent-red);
+    color: var(--accent-red);
+}
+.btn-danger:hover:not(:disabled) {
+    background: hsla(350, 80%, 60%, 0.1);
+    transform: translateY(-2px);
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ── Stats Grid ────────────────────────────────────────── */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    flex: 1;
+}
+
+.stat-card {
+    background: hsla(0, 0%, 100%, 0.03);
+    border: 1px solid hsla(0, 0%, 100%, 0.05);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    transition: transform 0.3s ease, background 0.3s ease;
+}
+.stat-card:hover {
+    transform: translateX(5px);
+    background: hsla(0, 0%, 100%, 0.05);
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    background: hsla(210, 100%, 60%, 0.1);
+    color: var(--accent-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.highlight-card {
+    background: linear-gradient(135deg, hsla(45, 100%, 55%, 0.1) 0%, hsla(45, 100%, 55%, 0.02) 100%);
+    border-color: hsla(45, 100%, 55%, 0.3);
+}
+.highlight-card .stat-icon {
+    background: hsla(45, 100%, 55%, 0.2);
+    color: var(--accent-gold);
+    box-shadow: 0 0 15px hsla(45, 100%, 55%, 0.3);
+}
+
+.stat-details h3 {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stat-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: white;
+}
+
+/* ── Status Indicator ──────────────────────────────────── */
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.2);
+}
+.led {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #555;
+    transition: all 0.3s ease;
+}
+.led.active {
+    background: var(--accent-green);
+    box-shadow: 0 0 10px var(--accent-green);
+}
+
+/* ── Main Video Area ───────────────────────────────────── */
+.video-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.video-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.video-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.video-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.badges {
+    display: flex;
+    gap: 10px;
+}
+
+.badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.badge-ai {
+    background: hsla(210, 100%, 60%, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid hsla(210, 100%, 60%, 0.3);
+}
+
+.badge-live {
+    background: hsla(350, 80%, 60%, 0.15);
+    color: var(--accent-red);
+    border: 1px solid hsla(350, 80%, 60%, 0.3);
+}
+
+.video-frame-container {
+    flex: 1;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#video-stream {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.placeholder {
+    color: var(--text-muted);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+.placeholder i {
+    font-size: 3rem;
+    opacity: 0.5;
+}
+
+/* ── Real-time Chart Area ──────────────────────────────── */
+.chart-wrapper {
+    height: 250px;
+    margin-top: 20px;
+    padding: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .dashboard-container {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+    .video-wrapper {
+        min-height: 50vh;
+    }
+}

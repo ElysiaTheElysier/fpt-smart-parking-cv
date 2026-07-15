@@ -1,0 +1,4 @@
+New-Item -ItemType File -Force data\raw_videos\.gitkeep
+New-Item -ItemType File -Force data\outputs\.gitkeep
+New-Item -ItemType File -Force data\calibration\.gitkeep
+New-Item -ItemType File -Force models\.gitkeep
